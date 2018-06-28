@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-sdfgsdfglkjsdfkjsfdgfkj
+
 # -*- coding: utf8 -*-
 #
 #   Hello World client in Python
@@ -32,6 +32,7 @@ from rospy import Duration
 
 #left_current_
 left_step = 0
+right_step = 0
 left_dest_matrix = [[0] * 7 for i in range(500)]
 right_dest_matrix = [[0] * 7 for i in range(100)]
 joint_buffer = [0] * 14
@@ -64,8 +65,10 @@ def get_distance(distance_buffer):
 def get_step(norm):
     return 10*norm
 
-#def get_time(step):
-#    return
+def get_time(step):
+    #if step > 150:
+    #    return 0.01
+    return (0.01506947+(4.23641834/step))
 
 def set_ksphere_size(size):
     global ksphere_size
@@ -125,6 +128,7 @@ def set_j(cmd, limb, move):
     global left_count
     global right_count
     global left_step
+    global right_step
     left = baxter_interface.Limb('left')
     right = baxter_interface.Limb('right')
     movement = plane + '_' + move
@@ -256,19 +260,27 @@ def set_j(cmd, limb, move):
             #print(right_joint_buffer)
             #joint_buffer = right_joint_buffer + right_joint_buffer
             right_amount_buffer = [x - y for x, y in zip(right_dest_buffer, right_joint_buffer)]
+            right_norm = get_distance(right_amount_buffer)
+            print(right_norm)
+            right_step = int(get_step(right_norm))
+            print(right_step)
             #print('444444')
-            #print(right_amount_buffer)
-            right_amount_buffer = [x/100 for x in right_amount_buffer]
-            #print('555555')
-            #print(right_amount_buffer)
+            #print(left_amount_buffer)
+            #left_amount_buffer = [x/100 for x in left_amount_buffer]
+            if right_step != 0:
+                right_amount_buffer = [x/right_step for x in right_amount_buffer]
+                right_dest_matrix = [[0] * 7 for i in range(right_step)]
+                #print('555555')
+                #print(left_amount_buffer)
 
-            for i in range(100):
-                for j in range(7):
-                    right_dest_matrix[i][j] = float(i * right_amount_buffer[j]) + float(right_joint_buffer[j])
-                    #print(right_dest_matrix[i])
+                for i in range(right_step):
+                    for j in range(7):
+                        right_dest_matrix[i][j] = float((i+1) * right_amount_buffer[j]) + float(right_joint_buffer[j])
+
+                print(right_dest_matrix)
 
 
-            right_count = 0
+                right_count = 0
 
     if testcase == 'failed':
         print('cannot reach that position')
@@ -299,6 +311,7 @@ def map_joystick(joystick):
     global left_count
     global right_count
     global left_step
+    global right_step
     left = baxter_interface.Limb('left')
     right = baxter_interface.Limb('right')
     grip_left = baxter_interface.Gripper('left', CHECK_VERSION)
@@ -422,14 +435,8 @@ def map_joystick(joystick):
                     left_joint_buffer = left_joint_buffer[:7]
                 print('current is')
                 print(left_joint_buffer)
-                #left_amount_buffer = left_dest_buffer - left_joint_buffer
 
-                #print(left_joint_buffer)
-                """joint_buffer = left_joint_buffer + right_joint_buffer
-                left_amount_buffer = [x - y for x, y in zip(left_dest_buffer, left_joint_buffer)]
-                left_amount_buffer = [x/2 for x in left_amount_buffer]
-                print(left_amount_buffer)"""
-                if left_count < left_step+1:
+                if left_count < left_step:
                     left_row_destination['left_s0'] = left_dest_matrix[left_count][0]
                     left_row_destination['left_s1'] = left_dest_matrix[left_count][1]
                     left_row_destination['left_e0'] = left_dest_matrix[left_count][2]
@@ -437,28 +444,13 @@ def map_joystick(joystick):
                     left_row_destination['left_w0'] = left_dest_matrix[left_count][4]
                     left_row_destination['left_w1'] = left_dest_matrix[left_count][5]
                     left_row_destination['left_w2'] = left_dest_matrix[left_count][6]
-                """if left_count < left_step+1:
-                    left_row_destination['left_s0'] = left_joint_buffer[0] + 1
-                    left_row_destination['left_s1'] = left_joint_buffer[1] + 1
-                    left_row_destination['left_e0'] = left_joint_buffer[2] + 1
-                    left_row_destination['left_e1'] = left_joint_buffer[3] + 1
-                    left_row_destination['left_w0'] = left_joint_buffer[4] + 1
-                    left_row_destination['left_w1'] = left_joint_buffer[5] + 1
-                    left_row_destination['left_w2'] = left_joint_buffer[6] + 1"""
 
                 print('should be')
                 print(left_row_destination)
-                #t_end = time.time() + 0.1
-                #while time.time() < t_end:
+
                 left.set_joint_positions(left_row_destination)                       #in direct mode, directly go to required positions
                 left_row_dictionary.clear()
-                #left_count = left_count + 1
-                #left.set_joint_positions(left_row_dictionary)
-                #left_row_dictionary.clear()                                         #in continuous mode, we need to clear the dictionary so the limbs move gradually
-                #print(left.joint_angles())
 
-
-                #print(type(joint_buffer[0]))
                 socket.send("start of movement")
                 message = socket.recv()
                 for request in range(14):
@@ -494,7 +486,9 @@ def map_joystick(joystick):
                 print(left_row_destination)
                 print('final pose')
                 print(left_row_dictionary)
-                t_end = time.time() + 0.3
+                time_interval = get_time(left_step)
+                print(time_interval)
+                t_end = time.time() + time_interval
                 while time.time() < t_end and left_count < left_step:
                     left.set_joint_positions(left_row_destination)                       #in direct mode, directly go to required positions
                 left_count = left_count + 1
@@ -527,8 +521,6 @@ def map_joystick(joystick):
                 #del joint_buffer[:]
         if len(right_row_dictionary):
             if mode_right == 'continuous mode':
-                right.set_joint_positions(right_row_dictionary)
-                right_row_dictionary.clear()
                 right_joint_buffer.insert(0,right.joint_angles()['right_s0'])
                 right_joint_buffer.insert(1,right.joint_angles()['right_s1'])
                 right_joint_buffer.insert(2,right.joint_angles()['right_e0'])
@@ -541,6 +533,21 @@ def map_joystick(joystick):
                 #print(right_joint_buffer)
                 joint_buffer = left_joint_buffer + right_joint_buffer
                 #print(joint_buffer)
+                if right_count < right_step:
+                    right_row_destination['right_s0'] = right_dest_matrix[right_count][0]
+                    right_row_destination['right_s1'] = right_dest_matrix[right_count][1]
+                    right_row_destination['right_e0'] = right_dest_matrix[right_count][2]
+                    right_row_destination['right_e1'] = right_dest_matrix[right_count][3]
+                    right_row_destination['right_w0'] = right_dest_matrix[right_count][4]
+                    right_row_destination['right_w1'] = right_dest_matrix[right_count][5]
+                    right_row_destination['right_w2'] = right_dest_matrix[right_count][6]
+
+                print('should be')
+                print(right_row_destination)
+
+                right.set_joint_positions(right_row_destination)                       #in direct mode, directly go to required positions
+                right_row_dictionary.clear()
+
                 socket.send("start of movement")
                 message = socket.recv()
                 for request in range(14):
@@ -565,7 +572,7 @@ def map_joystick(joystick):
                     right_joint_buffer = right_joint_buffer[:7]
                 #print(right_joint_buffer)
 
-                if right_count < 100:
+                if right_count < right_step:
                     right_row_destination['right_s0'] = right_dest_matrix[right_count][0]
                     right_row_destination['right_s1'] = right_dest_matrix[right_count][1]
                     right_row_destination['right_e0'] = right_dest_matrix[right_count][2]
@@ -574,12 +581,28 @@ def map_joystick(joystick):
                     right_row_destination['right_w1'] = right_dest_matrix[right_count][5]
                     right_row_destination['right_w2'] = right_dest_matrix[right_count][6]
 
-                print('should be')
+                print('next pose')
                 print(right_row_destination)
-                t_end = time.time() + 0.05
-                while time.time() < t_end and right_count < 100:
+                print('final pose')
+                print(right_row_dictionary)
+                time_interval = get_time(right_step)
+                print(time_interval)
+                t_end = time.time() + time_interval
+                while time.time() < t_end and right_count < right_step:
                     right.set_joint_positions(right_row_destination)                       #in direct mode, directly go to required positions
                 right_count = right_count + 1
+                print('now is')
+                right_joint_buffer.insert(0,right.joint_angles()['right_s0'])
+                right_joint_buffer.insert(1,right.joint_angles()['right_s1'])
+                right_joint_buffer.insert(2,right.joint_angles()['right_e0'])
+                right_joint_buffer.insert(3,right.joint_angles()['right_e1'])
+                right_joint_buffer.insert(4,right.joint_angles()['right_w0'])
+                right_joint_buffer.insert(5,right.joint_angles()['right_w1'])
+                right_joint_buffer.insert(6,right.joint_angles()['right_w2'])
+                if len(joint_buffer) > 7:
+                    right_joint_buffer = right_joint_buffer[:7]
+                print(right_joint_buffer)
+                print(right_count)
 
                 joint_buffer = left_joint_buffer + right_joint_buffer
                 #print(joint_buffer)
