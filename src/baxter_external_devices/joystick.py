@@ -134,6 +134,7 @@ class Joystick(object):
             'dPadUp', 'dPadDown', 'dPadLeft', 'dPadRight',
             'leftBumper', 'rightBumper',
             'leftTrigger', 'rightTrigger',
+            'leftStickClick', 'rightStickClick',
             'function1', 'function2')
         stick_names = (
             'leftStickHorz', 'leftStickVert',
@@ -202,6 +203,9 @@ class XboxController(Joystick):
         self._controls['btnDown'] = (msg.buttons[0] == 1)
         self._controls['btnRight'] = (msg.buttons[1] == 1)
 
+        self._controls['leftStickClick'] = (msg.buttons[9] == 1)
+        self._controls['rightStickClick'] = (msg.buttons[10] == 1)
+
         self._controls['dPadUp'] = (msg.axes[7] > 0.5)
         self._controls['dPadDown'] = (msg.axes[7] < -0.5)
         self._controls['dPadLeft'] = (msg.axes[6] > 0.5)
@@ -218,7 +222,7 @@ class XboxController(Joystick):
         self._controls['rightTrigger'] = (msg.axes[5] < 0.0)
 
         self._controls['function1'] = (msg.buttons[6] == 1)
-        self._controls['function2'] = (msg.buttons[10] == 1)
+        self._controls['function2'] = (msg.buttons[7] == 1)
 
 
 class LogitechController(Joystick):
