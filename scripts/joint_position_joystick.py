@@ -20,7 +20,7 @@ import math
 import argparse
 
 import baxter_interface
-import baxter_external_devices
+from sensor_msgs.msg import Joy
 
 from baxter_interface import CHECK_VERSION
 
@@ -28,10 +28,271 @@ import rospy
 from rospy import Duration
 
 """setting the global variables"""
+class ButtonTransition(object):
+    """
+    Monitor button transitions.
+    The transition is measured when read.
+    """
+    def __init__(self, val_func, down_val=True, up_val=False):
+        self._raw_value = val_func
+        self._down_val = down_val
+        self._up_val = up_val
+        self._up_checked = True
+        self._down_checked = False
+
+    def down(self):
+        val = self._raw_value()
+        if val == self._down_val:
+            if not self._down_checked:
+                self._down_checked = True
+                return True
+        else:
+            self._down_checked = False
+        return False
+
+    def up(self):
+        val = self._raw_value()
+        if val == self._up_val:
+            if not self._up_checked:
+                self._up_checked = True
+                return True
+        else:
+            self._up_checked = False
+        return False
+
+
+class StickTransition(object):
+    """
+    Monitor transitions in stick movement.
+    The transition is measured when read.
+    """
+    def __init__(self, val_func, epsilon=0.05):
+        self._raw_value = val_func
+        self._epsilon = epsilon
+        self._value = 0.0
+
+    def value(self):
+        self.changed()
+        return self._value
+
+    def changed(self):
+        value = self._raw_value()
+        if abs(value - self._value) > self._epsilon:
+            self._value = value
+            return True
+        return False
+
+    def increased(self):
+        value = self._raw_value()
+        if (value - self._value) > self._epsilon:
+            self._value = value
+            return True
+        return False
+
+    def decreased(self):
+        value = self._raw_value()
+        if (self._value - value) > self._epsilon:
+            self._value = value
+            return True
+        return False
+
+
+class Joystick(object):
+    """
+    Abstract base class to handle joystick input.
+    """
+
+    def __init__(self, scale=1.0, offset=0.0, deadband=0.1):
+        """
+        Maps joystick input to robot control.
+        @type scale: float
+        @param scale: scaling applied to joystick values [1.0]
+        @type offset: float
+        @param offset: joystick offset values, post-scaling [0.0]
+        @type deadband: float
+        @param deadband: deadband post scaling and offset [0.1]
+        Raw joystick valuess are in [1.0...-1.0].
+        """
+        sub = rospy.Subscriber("/joy", Joy, self._on_joy)
+        self._scale = scale
+        self._offset = offset
+        self._deadband = deadband
+        self._controls = {}
+
+        self._buttons = {}
+        self._sticks = {}
+        button_names = (
+            'btnLeft', 'btnUp', 'btnDown', 'btnRight',
+            'dPadUp', 'dPadDown', 'dPadLeft', 'dPadRight',
+            'leftBumper', 'rightBumper',
+            'leftTrigger', 'rightTrigger',
+            'leftStickClick', 'rightStickClick',
+            'function1', 'function2')
+        stick_names = (
+            'leftStickHorz', 'leftStickVert',
+            'rightStickHorz', 'rightStickVert')
+
+        #doing this with lambda won't work
+        def gen_val_func(name, type_name):
+            def val_func():
+                return type_name(
+                    name in self._controls and self._controls[name])
+            return val_func
+
+        for name in button_names:
+            self._buttons[name] = ButtonTransition(gen_val_func(name, bool))
+        for name in stick_names:
+            self._sticks[name] = StickTransition(gen_val_func(name, float))
+
+    def _on_joy(self, msg):
+        """ callback for messages from joystick input
+        Args:
+              msg(Joy): a joystick input message
+        """
+        raise NotImplementedError()
+
+    def button_up(self, name):
+        return self._buttons[name].up()
+
+    def button_down(self, name):
+        return self._buttons[name].down()
+
+    def stick_changed(self, name):
+        return self._sticks[name].changed()
+
+    def stick_inc(self, name):
+        return self._sticks[name].increased()
+
+    def stick_dec(self, name):
+        return self._sticks[name].decreased()
+
+    def stick_value(self, name):
+        """
+        Returns:
+            the deadbanded, scaled and offset value of the axis
+        """
+        value = self._sticks[name].value()
+        if value > self._deadband or value < -self._deadband:
+            return (value * self._scale) + self._offset
+        return 0
+
+
+class XboxController(Joystick):
+    """
+    Xbox specialization of Joystick.
+    """
+    def __init__(self, scale=1.0, offset=0.0, deadband=0.5):
+        super(XboxController, self).__init__(scale, offset, deadband)
+
+    def _on_joy(self, msg):
+        """ callback for messages from joystick input
+        Args:
+              msg(Joy): a joystick input message
+        """
+
+        self._controls['btnLeft'] = (msg.buttons[2] == 1)
+        self._controls['btnUp'] = (msg.buttons[3] == 1)
+        self._controls['btnDown'] = (msg.buttons[0] == 1)
+        self._controls['btnRight'] = (msg.buttons[1] == 1)
+
+        self._controls['leftStickClick'] = (msg.buttons[9] == 1)
+        self._controls['rightStickClick'] = (msg.buttons[10] == 1)
+
+        self._controls['dPadUp'] = (msg.axes[7] > 0.5)
+        self._controls['dPadDown'] = (msg.axes[7] < -0.5)
+        self._controls['dPadLeft'] = (msg.axes[6] > 0.5)
+        self._controls['dPadRight'] = (msg.axes[6] < -0.5)
+
+        self._controls['leftStickHorz'] = msg.axes[0]
+        self._controls['leftStickVert'] = msg.axes[1]
+        self._controls['rightStickHorz'] = msg.axes[3]
+        self._controls['rightStickVert'] = msg.axes[4]
+
+        self._controls['leftBumper'] = (msg.buttons[4] == 1)
+        self._controls['rightBumper'] = (msg.buttons[5] == 1)
+        self._controls['leftTrigger'] = (msg.axes[2] < 0.0)
+        self._controls['rightTrigger'] = (msg.axes[5] < 0.0)
+
+        self._controls['function1'] = (msg.buttons[6] == 1)
+        self._controls['function2'] = (msg.buttons[7] == 1)
+
+
+class LogitechController(Joystick):
+    """
+    Logitech specialization of Joystick.
+    """
+    def __init__(self, scale=1.0, offset=0.0, deadband=0.1):
+        super(LogitechController, self).__init__(scale, offset, deadband)
+
+    def _on_joy(self, msg):
+        """ callback for messages from joystick input
+        Args:
+              msg(Joy): a joystick input message
+        """
+        self._controls['btnLeft'] = (msg.buttons[2] == 1)
+        self._controls['btnUp'] = (msg.buttons[3] == 1)
+        self._controls['btnDown'] = (msg.buttons[0] == 1)
+        self._controls['btnRight'] = (msg.buttons[1] == 1)
+
+        self._controls['dPadUp'] = (msg.axes[7] > 0.5)
+        self._controls['dPadDown'] = (msg.axes[7] < -0.5)
+        self._controls['dPadLeft'] = (msg.axes[6] > 0.5)
+        self._controls['dPadRight'] = (msg.axes[6] < -0.5)
+
+        self._controls['leftStickHorz'] = msg.axes[0]
+        self._controls['leftStickVert'] = msg.axes[1]
+        self._controls['rightStickHorz'] = msg.axes[3]
+        self._controls['rightStickVert'] = msg.axes[4]
+
+        self._controls['leftBumper'] = (msg.buttons[4] == 1)
+        self._controls['rightBumper'] = (msg.buttons[5] == 1)
+        self._controls['leftTrigger'] = (msg.axes[2] < 0.0)
+        self._controls['rightTrigger'] = (msg.axes[5] < 0.0)
+
+        self._controls['function1'] = (msg.buttons[6] == 1)
+        self._controls['function2'] = (msg.buttons[7] == 1)
+
+class PS3Controller(Joystick):
+    """
+    PS3 specialization of Joystick.
+    """
+    def __init__(self, scale=1.0, offset=0.0, deadband=0.1):
+        super(PS3Controller, self).__init__(scale, offset, deadband)
+
+    def _on_joy(self, msg):
+        """ callback for messages from joystick input
+        Args:
+              msg(Joy): a joystick input message
+        """
+
+        self._controls['btnLeft'] = (msg.buttons[15] == 1)
+        self._controls['btnUp'] = (msg.buttons[12] == 1)
+        self._controls['btnDown'] = (msg.buttons[14] == 1)
+        self._controls['btnRight'] = (msg.buttons[13] == 1)
+
+        self._controls['dPadUp'] = (msg.buttons[4] == 1)
+        self._controls['dPadDown'] = (msg.buttons[6] == 1)
+        self._controls['dPadLeft'] = (msg.buttons[7] == 1)
+        self._controls['dPadRight'] = (msg.buttons[5] == 1)
+
+        self._controls['leftStickHorz'] = msg.axes[0]
+        self._controls['leftStickVert'] = msg.axes[1]
+        self._controls['rightStickHorz'] = msg.axes[2]
+        self._controls['rightStickVert'] = msg.axes[3]
+
+        self._controls['leftBumper'] = (msg.buttons[10] == 1)
+        self._controls['rightBumper'] = (msg.buttons[11] == 1)
+        self._controls['leftTrigger'] = (msg.buttons[8] == 1)
+        self._controls['rightTrigger'] = (msg.buttons[9] == 1)
+
+        self._controls['function1'] = (msg.buttons[0] == 1)
+        self._controls['function2'] = (msg.buttons[3] == 1)
+
 
 #left_current_
 left_dest_matrix = [[0] * 7 for i in range(100)]
 right_dest_matrix = [[0] * 7 for i in range(100)]
+temp_matrix = [[0] * 7] * 100
 joint_buffer = [0] * 14
 left_joint_buffer = [0] * 7
 right_joint_buffer = [0] * 7
@@ -113,8 +374,7 @@ def set_j(cmd, limb, move):
     global right_joint_buffer
     global left_count
     global right_count
-    left = baxter_interface.Limb('left')
-    right = baxter_interface.Limb('right')
+    global temp_matrix
     movement = plane + '_' + move
     if limb == 'left':
         joint = left_joints[0]
@@ -172,13 +432,15 @@ def set_j(cmd, limb, move):
             #print('111111')
             #print(left_dest_buffer)
             #print('222222')
-            left_joint_buffer.insert(0,left.joint_angles()['left_s0'])
-            left_joint_buffer.insert(1,left.joint_angles()['left_s1'])
-            left_joint_buffer.insert(2,left.joint_angles()['left_e0'])
-            left_joint_buffer.insert(3,left.joint_angles()['left_e1'])
-            left_joint_buffer.insert(4,left.joint_angles()['left_w0'])
-            left_joint_buffer.insert(5,left.joint_angles()['left_w1'])
-            left_joint_buffer.insert(6,left.joint_angles()['left_w2'])
+            if left_joint_buffer[0] == 0 and left_joint_buffer == 0:
+                left_joint_buffer.insert(0,0)
+                left_joint_buffer.insert(1,0)
+                left_joint_buffer.insert(2,0)
+                left_joint_buffer.insert(3,0)
+                left_joint_buffer.insert(4,0)
+                left_joint_buffer.insert(5,0)
+                left_joint_buffer.insert(6,0)
+
             if len(joint_buffer) > 7:
                 left_joint_buffer = left_joint_buffer[:7]
             #print('333333')
@@ -188,14 +450,16 @@ def set_j(cmd, limb, move):
             #print('444444')
             #print(left_amount_buffer)
             left_amount_buffer = [x/100 for x in left_amount_buffer]
-            #print('555555')
-            #print(left_amount_buffer)
+            print('555555')
+            print(left_amount_buffer)
+
+
 
             for i in range(100):
                 for j in range(7):
                     left_dest_matrix[i][j] = float((i+1) * left_amount_buffer[j]) + float(left_joint_buffer[j])
-                    #print(left_dest_matrix[i])
-
+            #print('wahahahahahaha')
+            #print(left_dest_matrix)
 
             left_count = 0
 
@@ -222,13 +486,15 @@ def set_j(cmd, limb, move):
             #print('111111')
             #print(right_dest_buffer)
             #print('222222')
-            right_joint_buffer.insert(0,right.joint_angles()['right_s0'])
-            right_joint_buffer.insert(1,right.joint_angles()['right_s1'])
-            right_joint_buffer.insert(2,right.joint_angles()['right_e0'])
-            right_joint_buffer.insert(3,right.joint_angles()['right_e1'])
-            right_joint_buffer.insert(4,right.joint_angles()['right_w0'])
-            right_joint_buffer.insert(5,right.joint_angles()['right_w1'])
-            right_joint_buffer.insert(6,right.joint_angles()['right_w2'])
+            if right_joint_buffer[0] == 0 and right_joint_buffer[1] == 0:
+                right_joint_buffer.insert(0,0)
+                right_joint_buffer.insert(1,0)
+                right_joint_buffer.insert(2,0)
+                right_joint_buffer.insert(3,0)
+                right_joint_buffer.insert(4,0)
+                right_joint_buffer.insert(5,0)
+                right_joint_buffer.insert(6,0)
+
             if len(joint_buffer) > 7:
                 right_joint_buffer = right_joint_buffer[:7]
             #print('333333')
@@ -277,11 +543,6 @@ def map_joystick(joystick):
     global right_dest_matrix
     global left_count
     global right_count
-    left = baxter_interface.Limb('left')
-    right = baxter_interface.Limb('right')
-    grip_left = baxter_interface.Gripper('left', CHECK_VERSION)
-    grip_right = baxter_interface.Gripper('right', CHECK_VERSION)
-
 
     #abbreviations
     jfor_right = lambda s1, s2: (joystick.stick_value(s1) < 0) and (joystick.stick_value(s2) > 0)
@@ -390,50 +651,19 @@ def map_joystick(joystick):
         if len(left_row_dictionary):
             if mode_left == 'continuous mode':
 
-                #left_amount_buffer = left_dest_buffer - left_joint_buffer
-                left_joint_buffer.insert(0,left.joint_angles()['left_s0'])
-                left_joint_buffer.insert(1,left.joint_angles()['left_s1'])
-                left_joint_buffer.insert(2,left.joint_angles()['left_e0'])
-                left_joint_buffer.insert(3,left.joint_angles()['left_e1'])
-                left_joint_buffer.insert(4,left.joint_angles()['left_w0'])
-                left_joint_buffer.insert(5,left.joint_angles()['left_w1'])
-                left_joint_buffer.insert(6,left.joint_angles()['left_w2'])
-                if len(joint_buffer) > 7:
-                    left_joint_buffer = left_joint_buffer[:7]
-                #print(left_joint_buffer)
-                """joint_buffer = left_joint_buffer + right_joint_buffer
-                left_amount_buffer = [x - y for x, y in zip(left_dest_buffer, left_joint_buffer)]
-                left_amount_buffer = [x/2 for x in left_amount_buffer]
-                print(left_amount_buffer)"""
-
-                left.set_joint_positions(left_row_dictionary)
-                left_row_dictionary.clear()                                         #in continuous mode, we need to clear the dictionary so the limbs move gradually
-                #print(left.joint_angles())
-
-                #print(type(joint_buffer[0]))
-                socket.send("start of movement")
-                message = socket.recv()
-                for request in range(14):
-                    #print("Sending request %s" % request)
-                    #print(str(joint_buffer[request]))
-                    socket.send(str(joint_buffer[request]))
-                    #  Get the reply.
-                    message = socket.recv()
-                    #print("Received reply %s [ %s ]" % (request, message))"""
-                #socket.send("end of movement")
-                #del joint_buffer[:]
-            if mode_left == 'direct mode':
+                print('not yet')
+            if mode_left == 'direct mode' and left_count < 100:
 
                 #print('kkkkkkk')
                 #if left_count == 100:
 
-                left_joint_buffer.insert(0,left.joint_angles()['left_s0'])
-                left_joint_buffer.insert(1,left.joint_angles()['left_s1'])
-                left_joint_buffer.insert(2,left.joint_angles()['left_e0'])
-                left_joint_buffer.insert(3,left.joint_angles()['left_e1'])
-                left_joint_buffer.insert(4,left.joint_angles()['left_w0'])
-                left_joint_buffer.insert(5,left.joint_angles()['left_w1'])
-                left_joint_buffer.insert(6,left.joint_angles()['left_w2'])
+                left_joint_buffer.insert(0,left_dest_matrix[left_count][0])
+                left_joint_buffer.insert(1,left_dest_matrix[left_count][1])
+                left_joint_buffer.insert(2,left_dest_matrix[left_count][2])
+                left_joint_buffer.insert(3,left_dest_matrix[left_count][3])
+                left_joint_buffer.insert(4,left_dest_matrix[left_count][4])
+                left_joint_buffer.insert(5,left_dest_matrix[left_count][5])
+                left_joint_buffer.insert(6,left_dest_matrix[left_count][6])
                 if len(joint_buffer) > 7:
                     left_joint_buffer = left_joint_buffer[:7]
 
@@ -460,11 +690,11 @@ def map_joystick(joystick):
                     left_row_destination['left_w1'] = left_dest_matrix[left_count][5]
                     left_row_destination['left_w2'] = left_dest_matrix[left_count][6]
 
-                print('should be')
-                print(left_row_destination)
+                print(left_count)
+                print(left_dest_matrix)
                 t_end = time.time() + 0.1
                 while time.time() < t_end and left_count < 100:
-                    left.set_joint_positions(left_row_destination)                       #in direct mode, directly go to required positions
+                    sleep(0.1)                       #in direct mode, directly go to required positions
                 left_count = left_count + 1
 
 
@@ -484,40 +714,16 @@ def map_joystick(joystick):
                 #del joint_buffer[:]
         if len(right_row_dictionary):
             if mode_right == 'continuous mode':
-                right.set_joint_positions(right_row_dictionary)
-                right_row_dictionary.clear()
-                right_joint_buffer.insert(0,right.joint_angles()['right_s0'])
-                right_joint_buffer.insert(1,right.joint_angles()['right_s1'])
-                right_joint_buffer.insert(2,right.joint_angles()['right_e0'])
-                right_joint_buffer.insert(3,right.joint_angles()['right_e1'])
-                right_joint_buffer.insert(4,right.joint_angles()['right_w0'])
-                right_joint_buffer.insert(5,right.joint_angles()['right_w1'])
-                right_joint_buffer.insert(6,right.joint_angles()['right_w2'])
-                if len(joint_buffer) > 7:
-                    right_joint_buffer = right_joint_buffer[:7]
-                #print(right_joint_buffer)
-                joint_buffer = left_joint_buffer + right_joint_buffer
-                #print(joint_buffer)
-                socket.send("start of movement")
-                message = socket.recv()
-                for request in range(14):
-                    #print("Sending request %s" % request)
-                    print(str(joint_buffer[request]))
-                    socket.send(str(joint_buffer[request]))
-                    #  Get the reply.
-                    message = socket.recv()
-                    print("Received reply %s [ %s ]" % (request, message))
-                #print(joint_buffer)
-                #del joint_buffer[:]
-            if mode_right == 'direct mode':
+                print('not yet')
+            if mode_right == 'direct mode' and right_count < 100:
                 #right.set_joint_positions(right_row_dictionary)
-                right_joint_buffer.insert(0,right.joint_angles()['right_s0'])
-                right_joint_buffer.insert(1,right.joint_angles()['right_s1'])
-                right_joint_buffer.insert(2,right.joint_angles()['right_e0'])
-                right_joint_buffer.insert(3,right.joint_angles()['right_e1'])
-                right_joint_buffer.insert(4,right.joint_angles()['right_w0'])
-                right_joint_buffer.insert(5,right.joint_angles()['right_w1'])
-                right_joint_buffer.insert(6,right.joint_angles()['right_w2'])
+                right_joint_buffer.insert(0,right_dest_matrix[right_count][0])
+                right_joint_buffer.insert(1,right_dest_matrix[right_count][1])
+                right_joint_buffer.insert(2,right_dest_matrix[right_count][2])
+                right_joint_buffer.insert(3,right_dest_matrix[right_count][3])
+                right_joint_buffer.insert(4,right_dest_matrix[right_count][4])
+                right_joint_buffer.insert(5,right_dest_matrix[right_count][5])
+                right_joint_buffer.insert(6,right_dest_matrix[right_count][6])
                 if len(joint_buffer) > 7:
                     right_joint_buffer = right_joint_buffer[:7]
                 #print(right_joint_buffer)
@@ -531,11 +737,9 @@ def map_joystick(joystick):
                     right_row_destination['right_w1'] = right_dest_matrix[right_count][5]
                     right_row_destination['right_w2'] = right_dest_matrix[right_count][6]
 
-                print('should be')
-                print(right_row_destination)
                 t_end = time.time() + 0.1
                 while time.time() < t_end and right_count < 100:
-                    right.set_joint_positions(right_row_destination)                       #in direct mode, directly go to required positions
+                    sleep(0.1)                      #in direct mode, directly go to required positions
                 right_count = right_count + 1
 
                 joint_buffer = left_joint_buffer + right_joint_buffer
@@ -544,7 +748,7 @@ def map_joystick(joystick):
                 message = socket.recv()
                 for request in range(14):
                     #print("Sending request %s" % request)
-                    print(str(joint_buffer[request]))
+                    #print(str(joint_buffer[request]))
                     socket.send(str(joint_buffer[request]))
                     #  Get the reply.
                     message = socket.recv()
@@ -586,29 +790,16 @@ key bindings.
 
     joystick = None
     if args.joystick == 'xbox':
-        joystick = baxter_external_devices.joystick.XboxController()
+        joystick = XboxController()
     elif args.joystick == 'logitech':
-        joystick = baxter_external_devices.joystick.LogitechController()
+        joystick = LogitechController()
     elif args.joystick == 'ps3':
-        joystick = baxter_external_devices.joystick.PS3Controller()
+        joystick = PS3Controller()
     else:
         parser.error("Unsupported joystick type '%s'" % (args.joystick))
 
     print("Initializing node... ")
     rospy.init_node("rsdk_joint_position_joystick")
-    print("Getting robot state... ")
-    rs = baxter_interface.RobotEnable(CHECK_VERSION)
-    init_state = rs.state().enabled
-
-    def clean_shutdown():
-        print("\nExiting example.")
-        if not init_state:
-            print("Disabling robot...")
-            rs.disable()
-    rospy.on_shutdown(clean_shutdown)
-
-    print("Enabling robot... ")
-    rs.enable()
 
     map_joystick(joystick)
     print("Done.")
