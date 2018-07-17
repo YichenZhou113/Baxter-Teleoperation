@@ -136,6 +136,8 @@ def set_j(cmd, limb, move):
         body_part = 'right_link23'
     if joint == 'right_w1':
         body_part = 'right_link3'                                                   #set the parameters to search in the csv file
+    if movement == 'm_centre':
+        body_part = 'left_link123'
 
     print(joint)
     csv_file = csv.reader(open('baxter_databank.csv', "rb"), delimiter=",")
@@ -411,14 +413,22 @@ def map_joystick(joystick):
                 #print(left.joint_angles())
 
                 #print(type(joint_buffer[0]))
-                socket.send("start of movement")
+                joint_buffer = left_joint_buffer + right_joint_buffer
+                tosend = "start"
+                for index in range(14):
+                    temp = str(joint_buffer[index])[:7]
+                    tosend = tosend + temp
+                print(right_joint_buffer)
+                socket.send(tosend)
                 message = socket.recv()
-                for request in range(14):
+                #socket.send("start of movement")
+                #message = socket.recv()
+                #for request in range(14):
                     #print("Sending request %s" % request)
                     #print(str(joint_buffer[request]))
-                    socket.send(str(joint_buffer[request]))
+                #    socket.send(str(joint_buffer[request]))
                     #  Get the reply.
-                    message = socket.recv()
+                #    message = socket.recv()
                     #print("Received reply %s [ %s ]" % (request, message))"""
                 #socket.send("end of movement")
                 #del joint_buffer[:]
@@ -460,25 +470,32 @@ def map_joystick(joystick):
                     left_row_destination['left_w1'] = left_dest_matrix[left_count][5]
                     left_row_destination['left_w2'] = left_dest_matrix[left_count][6]
 
-                print('should be')
-                print(left_row_destination)
+                #print('should be')
+                #print(left_row_destination)
                 t_end = time.time() + 0.1
                 while time.time() < t_end and left_count < 100:
                     left.set_joint_positions(left_row_destination)                       #in direct mode, directly go to required positions
                 left_count = left_count + 1
 
 
-                #print(left_joint_buffer)
+                print(left_joint_buffer)
                 joint_buffer = left_joint_buffer + right_joint_buffer
-                #print(joint_buffer)
-                socket.send("start of movement")
+                tosend = "start"
+                for index in range(14):
+                    temp = str(joint_buffer[index])[:7]
+                    tosend = tosend + temp
+                print(right_joint_buffer)
+                socket.send(tosend)
                 message = socket.recv()
-                for request in range(14):
+                #print(joint_buffer)
+                #socket.send("start of movement")
+                #message = socket.recv()
+                #for request in range(14):
                     #print("Sending request %s" % request)
                     #print(str(joint_buffer[request]))
-                    socket.send(str(joint_buffer[request]))
+                #    socket.send(str(joint_buffer[request]))
                     #  Get the reply.
-                    message = socket.recv()
+                #    message = socket.recv()
                     #print("Received reply %s [ %s ]" % (request, message))
                 #print(joint_buffer)
                 #del joint_buffer[:]
@@ -497,16 +514,23 @@ def map_joystick(joystick):
                     right_joint_buffer = right_joint_buffer[:7]
                 #print(right_joint_buffer)
                 joint_buffer = left_joint_buffer + right_joint_buffer
-                #print(joint_buffer)
-                socket.send("start of movement")
+                tosend = "start"
+                for index in range(14):
+                    temp = str(joint_buffer[index])[:7]
+                    tosend = tosend + temp
+                print(right_joint_buffer)
+                socket.send(tosend)
                 message = socket.recv()
-                for request in range(14):
+                #print(joint_buffer)
+                #socket.send("start of movement")
+                #message = socket.recv()
+                #for request in range(14):
                     #print("Sending request %s" % request)
-                    print(str(joint_buffer[request]))
-                    socket.send(str(joint_buffer[request]))
+                #    print(str(joint_buffer[request]))
+                #    socket.send(str(joint_buffer[request]))
                     #  Get the reply.
-                    message = socket.recv()
-                    print("Received reply %s [ %s ]" % (request, message))
+                #    message = socket.recv()
+                #    print("Received reply %s [ %s ]" % (request, message))
                 #print(joint_buffer)
                 #del joint_buffer[:]
             if mode_right == 'direct mode':
@@ -522,6 +546,7 @@ def map_joystick(joystick):
                     right_joint_buffer = right_joint_buffer[:7]
                 #print(right_joint_buffer)
 
+
                 if right_count < 100:
                     right_row_destination['right_s0'] = right_dest_matrix[right_count][0]
                     right_row_destination['right_s1'] = right_dest_matrix[right_count][1]
@@ -531,23 +556,27 @@ def map_joystick(joystick):
                     right_row_destination['right_w1'] = right_dest_matrix[right_count][5]
                     right_row_destination['right_w2'] = right_dest_matrix[right_count][6]
 
-                print('should be')
-                print(right_row_destination)
+                #print('should be')
+                #print(right_row_destination)
                 t_end = time.time() + 0.1
                 while time.time() < t_end and right_count < 100:
                     right.set_joint_positions(right_row_destination)                       #in direct mode, directly go to required positions
                 right_count = right_count + 1
 
                 joint_buffer = left_joint_buffer + right_joint_buffer
-                #print(joint_buffer)
-                socket.send("start of movement")
+                tosend = "start"
+                for index in range(14):
+                    temp = str(joint_buffer[index])[:7]
+                    tosend = tosend + temp
+                print(right_joint_buffer)
+                socket.send(tosend)
                 message = socket.recv()
-                for request in range(14):
+                #for request in range(14):
                     #print("Sending request %s" % request)
-                    print(str(joint_buffer[request]))
-                    socket.send(str(joint_buffer[request]))
+                #    print(str(joint_buffer[request]))
+                #    socket.send(str(joint_buffer[request]))
                     #  Get the reply.
-                    message = socket.recv()
+                #    message = socket.recv()
                     #print("Received reply %s [ %s ]" % (request, message))
                 #print(joint_buffer)
                 #del joint_buffer[:]
