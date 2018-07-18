@@ -671,20 +671,6 @@ def map_joystick(joystick, speed):
                 if len(joint_buffer) > 7:
                     left_joint_buffer = left_joint_buffer[:7]
 
-                """print('current is')
-                print(left_joint_buffer)
-                print('lololol')
-                print(left_joint_buffer[0]/left_row_dictionary['left_s0'])
-                print(left_joint_buffer[1]/left_row_dictionary['left_s1'])
-                print(left_joint_buffer[2]/left_row_dictionary['left_e0'])
-                print(left_joint_buffer[3]/left_row_dictionary['left_e1'])
-                print(left_joint_buffer[4]/left_row_dictionary['left_w0'])
-                print(left_joint_buffer[5]/left_row_dictionary['left_w1'])
-                print(left_joint_buffer[6]/left_row_dictionary['left_w2'])
-                print('should add')
-                print(left_amount_buffer)
-                print('left_dest_matrix is')
-                print(left_dest_matrix)"""
                 if left_count < 100:
                     left_row_destination['left_s0'] = left_dest_matrix[left_count][0]
                     left_row_destination['left_s1'] = left_dest_matrix[left_count][1]
@@ -702,27 +688,7 @@ def map_joystick(joystick, speed):
                 left_count = left_count + 1
 
 
-                #print(left_joint_buffer)
-                joint_buffer = left_joint_buffer + right_joint_buffer
-                tosend = "start"
-                for index in range(14):
-                    temp = str(joint_buffer[index])[:7]
-                    tosend = tosend + temp
-                print(right_joint_buffer)
-                socket.send(tosend)
-                message = socket.recv()
-                #print(joint_buffer)
-                #socket.send("start        ")
-                #message = socket.recv()
-                #for request in range(14):
-                    #print("Sending request %s" % request)
-                #    print(str(joint_buffer[request]))
-                #    socket.send(str(joint_buffer[request]))
-                    #  Get the reply.
-                #    message = socket.recv()
-                    #print("Received reply %s [ %s ]" % (request, message))
-                #print(joint_buffer)
-                #del joint_buffer[:]
+
         if len(right_row_dictionary):
             if mode_right == 'continuous mode':
                 print('not yet')
@@ -753,27 +719,15 @@ def map_joystick(joystick, speed):
                     sleep(speed)                      #in direct mode, directly go to required positions
                 right_count = right_count + 1
 
-                joint_buffer = left_joint_buffer + right_joint_buffer
-                tosend = "start"
-                for index in range(14):
-                    temp = str(joint_buffer[index])[:7]
-                    tosend = tosend + temp
-                print(right_joint_buffer)
-                socket.send(tosend)
-                message = socket.recv()
-                #print(joint_buffer)
-                #socket.send("start        ")
-                #message = socket.recv()
-                #for request in range(14):
-                #    print("Sending right request %s" % request)
-                #    print(str(joint_buffer[request]))
-                #    socket.send(str(joint_buffer[request]))
-                    #  Get the reply.
-                #    message = socket.recv()
-                    #print("Received reply %s [ %s ]" % (request, message))
-                #print(joint_buffer)
-                #del joint_buffer[:]
 
+        joint_buffer = left_joint_buffer + right_joint_buffer
+        tosend = "start"
+        for index in range(14):
+            temp = str(joint_buffer[index])[:7]
+            tosend = tosend + temp
+        print(right_joint_buffer)
+        socket.send(tosend)
+        message = socket.recv()
         rate.sleep()
     return False
 
