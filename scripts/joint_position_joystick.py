@@ -257,7 +257,7 @@ def set_j(cmd, limb, move):
 
 
 
-def map_joystick(joystick):
+def map_joystick(joystick,speed):
     global ksphere_size
     global plane
     global left_row_dictionary
@@ -472,7 +472,7 @@ def map_joystick(joystick):
 
                 #print('should be')
                 #print(left_row_destination)
-                t_end = time.time() + 0.1
+                t_end = time.time() + speed
                 while time.time() < t_end and left_count < 100:
                     left.set_joint_positions(left_row_destination)                       #in direct mode, directly go to required positions
                 left_count = left_count + 1
@@ -558,7 +558,7 @@ def map_joystick(joystick):
 
                 #print('should be')
                 #print(right_row_destination)
-                t_end = time.time() + 0.1
+                t_end = time.time() + speed
                 while time.time() < t_end and right_count < 100:
                     right.set_joint_positions(right_row_destination)                       #in direct mode, directly go to required positions
                 right_count = right_count + 1
@@ -607,21 +607,21 @@ key bindings.
                                      epilog=epilog)
     required = parser.add_argument_group('required arguments')
     required.add_argument(
-        '-j', '--joystick', required=True,
-        choices=['xbox', 'logitech', 'ps3'],
-        help='specify the type of joystick to use'
+        '-j', '--speed', required=True,
+        choices=['fast', 'medium', 'slow'],
+        help='specify the speed to use'
     )
     args = parser.parse_args(rospy.myargv()[1:])
 
-    joystick = None
-    if args.joystick == 'xbox':
-        joystick = baxter_external_devices.joystick.XboxController()
-    elif args.joystick == 'logitech':
-        joystick = baxter_external_devices.joystick.LogitechController()
-    elif args.joystick == 'ps3':
-        joystick = baxter_external_devices.joystick.PS3Controller()
+    joystick = baxter_external_devices.joystick.XboxController()
+    if args.speed == 'fast':
+        speed = 0.05
+    elif args.speed == 'medium':
+        speed = 0.1
+    elif args.speed == 'slow':
+        speed = 0.15
     else:
-        parser.error("Unsupported joystick type '%s'" % (args.joystick))
+        parser.error("Unsupported speed '%s'" % (args.speed))
 
     print("Initializing node... ")
     rospy.init_node("rsdk_joint_position_joystick")
@@ -639,7 +639,7 @@ key bindings.
     print("Enabling robot... ")
     rs.enable()
 
-    map_joystick(joystick)
+    map_joystick(joystick, speed)
     print("Done.")
 
 
