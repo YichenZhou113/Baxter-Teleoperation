@@ -412,26 +412,7 @@ def map_joystick(joystick,speed):
                 left_row_dictionary.clear()                                         #in continuous mode, we need to clear the dictionary so the limbs move gradually
                 #print(left.joint_angles())
 
-                #print(type(joint_buffer[0]))
-                joint_buffer = left_joint_buffer + right_joint_buffer
-                tosend = "start"
-                for index in range(14):
-                    temp = str(joint_buffer[index])[:7]
-                    tosend = tosend + temp
-                print(right_joint_buffer)
-                socket.send(tosend)
-                message = socket.recv()
-                #socket.send("start of movement")
-                #message = socket.recv()
-                #for request in range(14):
-                    #print("Sending request %s" % request)
-                    #print(str(joint_buffer[request]))
-                #    socket.send(str(joint_buffer[request]))
-                    #  Get the reply.
-                #    message = socket.recv()
-                    #print("Received reply %s [ %s ]" % (request, message))"""
-                #socket.send("end of movement")
-                #del joint_buffer[:]
+
             if mode_left == 'direct mode':
 
                 #print('kkkkkkk')
@@ -478,27 +459,7 @@ def map_joystick(joystick,speed):
                 left_count = left_count + 1
 
 
-                print(left_joint_buffer)
-                joint_buffer = left_joint_buffer + right_joint_buffer
-                tosend = "start"
-                for index in range(14):
-                    temp = str(joint_buffer[index])[:7]
-                    tosend = tosend + temp
-                print(right_joint_buffer)
-                socket.send(tosend)
-                message = socket.recv()
-                #print(joint_buffer)
-                #socket.send("start of movement")
-                #message = socket.recv()
-                #for request in range(14):
-                    #print("Sending request %s" % request)
-                    #print(str(joint_buffer[request]))
-                #    socket.send(str(joint_buffer[request]))
-                    #  Get the reply.
-                #    message = socket.recv()
-                    #print("Received reply %s [ %s ]" % (request, message))
-                #print(joint_buffer)
-                #del joint_buffer[:]
+
         if len(right_row_dictionary):
             if mode_right == 'continuous mode':
                 right.set_joint_positions(right_row_dictionary)
@@ -513,26 +474,7 @@ def map_joystick(joystick,speed):
                 if len(joint_buffer) > 7:
                     right_joint_buffer = right_joint_buffer[:7]
                 #print(right_joint_buffer)
-                joint_buffer = left_joint_buffer + right_joint_buffer
-                tosend = "start"
-                for index in range(14):
-                    temp = str(joint_buffer[index])[:7]
-                    tosend = tosend + temp
-                print(right_joint_buffer)
-                socket.send(tosend)
-                message = socket.recv()
-                #print(joint_buffer)
-                #socket.send("start of movement")
-                #message = socket.recv()
-                #for request in range(14):
-                    #print("Sending request %s" % request)
-                #    print(str(joint_buffer[request]))
-                #    socket.send(str(joint_buffer[request]))
-                    #  Get the reply.
-                #    message = socket.recv()
-                #    print("Received reply %s [ %s ]" % (request, message))
-                #print(joint_buffer)
-                #del joint_buffer[:]
+
             if mode_right == 'direct mode':
                 #right.set_joint_positions(right_row_dictionary)
                 right_joint_buffer.insert(0,right.joint_angles()['right_s0'])
@@ -563,24 +505,15 @@ def map_joystick(joystick,speed):
                     right.set_joint_positions(right_row_destination)                       #in direct mode, directly go to required positions
                 right_count = right_count + 1
 
-                joint_buffer = left_joint_buffer + right_joint_buffer
-                tosend = "start"
-                for index in range(14):
-                    temp = str(joint_buffer[index])[:7]
-                    tosend = tosend + temp
-                print(right_joint_buffer)
-                socket.send(tosend)
-                message = socket.recv()
-                #for request in range(14):
-                    #print("Sending request %s" % request)
-                #    print(str(joint_buffer[request]))
-                #    socket.send(str(joint_buffer[request]))
-                    #  Get the reply.
-                #    message = socket.recv()
-                    #print("Received reply %s [ %s ]" % (request, message))
-                #print(joint_buffer)
-                #del joint_buffer[:]
 
+        joint_buffer = left_joint_buffer + right_joint_buffer
+        tosend = "start"
+        for index in range(14):
+            temp = str(joint_buffer[index])[:7]
+            tosend = tosend + temp
+        print(right_joint_buffer)
+        socket.send(tosend)
+        message = socket.recv()
         rate.sleep()
     return False
 
